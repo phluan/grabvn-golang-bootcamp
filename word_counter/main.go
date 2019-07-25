@@ -10,8 +10,17 @@ import (
 	"text/scanner"
 )
 
-var MaxWorker = 5
+var MaxWorker = 100
 var finalCount = make(chan map[string]uint, 1)
+
+func breakUpFileToLines(file *os.File, stringsChannel chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		stringsChannel <- scanner.Text()
+	}
+}
 
 func CountWord(str string) map[string]uint {
 	var result = map[string]uint{}
@@ -68,6 +77,7 @@ func main() {
 
 	var stringsChannel = make(chan string)
 	var resultChannel = make(chan map[string]uint)
+	var breakUpFileGroup = sync.WaitGroup{}
 	var countGroup = sync.WaitGroup{}
 	var cummulateGroup = sync.WaitGroup{}
 
@@ -89,33 +99,38 @@ func main() {
 		}
 
 		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			stringsChannel <- scanner.Text()
-		}
+		breakUpFileGroup.Add(1)
+		go breakUpFileToLines(file, stringsChannel, &breakUpFileGroup)
 	}
+	// Wait for worker to finish off their work
+	breakUpFileGroup.Wait()
 	close(stringsChannel)
 
-	// Wait for worker to finish off their work
 	countGroup.Wait()
 	close(resultChannel)
+
 	cummulateGroup.Wait()
 
 	fmt.Println("-------------------------------------------------------")
 	fmt.Println("CUMMULATIVE COUNT: : ", <-finalCount)
 }
 
+// 1 workers
+// real	0m0.303s
+// user	0m0.313s
+// sys	0m0.204s
+
 // 2 workers
-// real	0m0.344s
-// user	0m0.285s
-// sys	0m0.190s
+// real	0m0.284s
+// user	0m0.283s
+// sys	0m0.189s
 
 // 5 workers
-// real	0m0.276s
-// user	0m0.290s
-// sys	0m0.190s
+// real	0m0.292s
+// user	0m0.321s
+// sys	0m0.219s
 
 // 100 workers
-// real	0m0.271s
-// user	0m0.304s
-// sys	0m0.195s
+// real	0m0.279s
+// user	0m0.311s
+// sys	0m0.197s
