@@ -20,7 +20,7 @@ func CountWord(str string) map[string]uint {
 
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 		if tok == scanner.Ident {
-			result[s.TokenText()] += 1
+			result[strings.ToLower(s.TokenText())] += 1
 		}
 	}
 	return result
