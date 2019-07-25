@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,7 +36,7 @@ func handle(strings chan string, resultChannel chan map[string]uint, wg *sync.Wa
 	}
 }
 
-func cummulateCount(resultChannel chan map[string]uint, wg *sync.WaitGroup) {
+func cummulate(resultChannel chan map[string]uint, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	finalResult := map[string]uint{}
@@ -71,23 +71,28 @@ func main() {
 	var countGroup = sync.WaitGroup{}
 	var cummulateGroup = sync.WaitGroup{}
 
-	// worker for cummulate count results from each file
-	cummulateGroup.Add(1)
-	go cummulateCount(resultChannel, &cummulateGroup)
-
 	// Initize pool of workers (count word in each file)
 	countGroup.Add(MaxWorker)
 	for i := 0; i < MaxWorker; i++ {
 		go handle(stringsChannel, resultChannel, &countGroup)
 	}
 
+	// worker for cummulate count results from each file
+	cummulateGroup.Add(1)
+	go cummulate(resultChannel, &cummulateGroup)
+
 	// Feed data to workers
 	for _, file := range files {
-		dat, err := ioutil.ReadFile(file)
+		file, err := os.Open(file)
 		if err != nil {
 			panic(err)
 		}
-		stringsChannel <- string(dat)
+
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			stringsChannel <- scanner.Text()
+		}
 	}
 	close(stringsChannel)
 
@@ -99,3 +104,18 @@ func main() {
 	fmt.Println("-------------------------------------------------------")
 	fmt.Println("CUMMULATIVE COUNT: : ", <-finalCount)
 }
+
+// 2 workers
+// real	0m0.344s
+// user	0m0.285s
+// sys	0m0.190s
+
+// 5 workers
+// real	0m0.276s
+// user	0m0.290s
+// sys	0m0.190s
+
+// 100 workers
+// real	0m0.271s
+// user	0m0.304s
+// sys	0m0.195s
